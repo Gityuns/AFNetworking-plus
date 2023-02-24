@@ -7,6 +7,7 @@
 //
 
 #import "SAViewController.h"
+#import "CCNetworkManager.h"
 
 @interface SAViewController ()
 
@@ -18,6 +19,10 @@
 {
     [super viewDidLoad];
 	// Do any additional setup after loading the view, typically from a nib.
+    for (NSInteger i=0; i<1000; i++) {
+        [CCNetworkManager GET:@"https://m.baidu.com/sf/vsearch/image/user/logininfo?src=mobile&page=search" params:nil success:nil failure:nil];
+    }
+    NSLog(@"===================");
 }
 
 - (void)didReceiveMemoryWarning
