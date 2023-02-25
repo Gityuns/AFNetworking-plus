@@ -4,6 +4,7 @@ platform :ios, '10.0'
 
 target 'AFNetworking-plus_Example' do
   pod 'AFNetworking-plus', :path => '../'
+  pod 'SVProgressHUD'
 
   target 'AFNetworking-plus_Tests' do
     inherit! :search_paths

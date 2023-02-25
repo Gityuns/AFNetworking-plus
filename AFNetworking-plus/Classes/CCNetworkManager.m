@@ -8,12 +8,14 @@
 #import "CCNetworkManager.h"
 #import "AFNetworking/AFNetworking.h"
 #import <CommonCrypto/CommonDigest.h>
+#import "MJExtension/MJExtension.h"
+#import "CCResponseModel.h"
 
 @interface CCNetworkManager ()
 
 @property (nonatomic, strong) AFHTTPSessionManager *sesstionManager;
 
-@property (nonatomic, strong) NSMutableDictionary *caches;
+@property (nonatomic, strong) NSCache *cache;
 
 @end
 
@@ -27,6 +29,7 @@
     return manager;
 }
 
+
 -(AFHTTPSessionManager *)sesstionManager{
     if (_sesstionManager == nil) {
         _sesstionManager = [AFHTTPSessionManager manager];
@@ -36,11 +39,11 @@
     return _sesstionManager;
 }
 
--(NSMutableDictionary *)caches{
-    if (_caches == nil) {
-        _caches = [[NSMutableDictionary alloc]init];
+-(NSCache *)cache{
+    if (_cache == nil) {
+        _cache = [[NSCache alloc]init];
     }
-    return _caches;
+    return _cache;
 }
 
 -(AFHTTPResponseSerializer *)responseSerializer{
@@ -71,97 +74,195 @@
     [self.sesstionManager.requestSerializer  setValue:@"" forHTTPHeaderField:keyPath];
 }
 
-+(void)GET:(NSString *)urlString params:(NSDictionary *_Nullable)params cancelLast:(BOOL)cancel  success:(CCSuccessHandle _Nullable)success failure:(CCFailureHandle _Nullable)failure{
-    AFHTTPSessionManager *manager = [CCNetworkManager defaultManager].sesstionManager;
-    NSURLSessionDataTask *task = [manager GET:urlString parameters:params headers:nil progress:nil success:^(NSURLSessionDataTask * _Nonnull task, id  _Nullable responseObject) {
-        [self removeRecordWithURL:urlString];
-        [self dealWithResponse:responseObject success:success failure:failure];
+#pragma mark - GET
+
++(void)GET:(NSString *)path params:(NSDictionary *_Nullable)params className:(NSString *_Nullable)className successHandle:(void (^_Nullable)(id data, NSString *_Nullable msg))success failureHandle:(void (^_Nullable)(NSError *err))failure{
+    [self GET:path params:params className:className showLoadingHud:NO autoCancel:NO successHandle:success failureHandle:failure];
+}
+
++(void)GET:(NSString *)path params:(NSDictionary *_Nullable)params className:(NSString *_Nullable)className showLoadingHud:(BOOL)loadingHud successHandle:(void (^_Nullable)(id data, NSString *_Nullable msg))success failureHandle:(void (^_Nullable)(NSError *err))failure{
+    [self GET:path params:params className:className showLoadingHud:loadingHud autoCancel:NO successHandle:success failureHandle:failure];
+}
+
++(void)GET:(NSString *)path params:(NSDictionary *_Nullable)params className:(NSString *_Nullable)className showLoadingHud:(BOOL)loadingHud autoCancel:(BOOL)cancel successHandle:(void (^_Nullable)(id data, NSString *_Nullable msg))success failureHandle:(void (^_Nullable)(NSError *err))failure{
+    [self GET:path params:params className:className showLoadingHud:loadingHud autoCancel:cancel progressHandle:nil successHandle:success failureHandle:failure];
+}
+
++(void)GET:(NSString *)path params:(NSDictionary *_Nullable)params className:(NSString *_Nullable)className showLoadingHud:(BOOL)loadingHud autoCancel:(BOOL)cancel progressHandle:(void(^_Nullable)(NSProgress* p))progress successHandle:(void (^_Nullable)(id data, NSString *_Nullable msg))success failureHandle:(void (^_Nullable)(NSError *err))failure{
+    [self GET:path params:params headers:nil className:className showLoadingHud:loadingHud autoCancel:cancel progressHandle:progress successHandle:success failureHandle:failure];
+}
+
++(void)GET:(NSString *)path params:(NSDictionary *_Nullable)params headers:(NSDictionary *_Nullable)headers className:(NSString *_Nullable)className showLoadingHud:(BOOL)loadingHud autoCancel:(BOOL)cancel progressHandle:(void(^_Nullable)(NSProgress* p))progress successHandle:(void (^_Nullable)(id data, NSString *_Nullable msg))success failureHandle:(void (^_Nullable)(NSError *err))failure{
+    CCNetworkManager *manager = [CCNetworkManager defaultManager];
+    if (cancel) [self removeTaskWithPath:path];
+    if (loadingHud && manager.configLoadingHUD) manager.configLoadingHUD();
+    NSURLSessionTask *task = [manager.sesstionManager GET:path parameters:params headers:headers progress:progress success:^(NSURLSessionDataTask * _Nonnull task, id  _Nullable responseObject) {
+        if(cancel) [self removeTaskWithPath:path];
+        [self dealWithResponse:responseObject className:className success:success failure:failure];
     } failure:^(NSURLSessionDataTask * _Nullable task, NSError * _Nonnull error) {
-        [self removeRecordWithURL:urlString];
-        if (failure) {
-            failure(error);
-        }
+        if(cancel) [self removeTaskWithPath:path];
+        if(failure) failure(error);
     }];
     [task resume];
-    if (cancel) {
-        [self recordRequest:urlString task:task];
+    if(cancel) [self cacheTask:task withPath:path];
+}
+
+#pragma mark - POST
+
++(void)POST:(NSString *)path params:(NSDictionary *_Nullable)params className:(NSString *_Nullable)className successHandle:(void (^_Nullable)(id data, NSString *_Nullable msg))success failureHandle:(void (^_Nullable)(NSError *err))failure{
+    [self POST:path params:params className:className showLoadingHud:NO autoCancel:NO successHandle:success failureHandle:failure];
+}
+
++(void)POST:(NSString *)path params:(NSDictionary *_Nullable)params className:(NSString *_Nullable)className showLoadingHud:(BOOL)loadingHud successHandle:(void (^_Nullable)(id data, NSString *_Nullable msg))success failureHandle:(void (^_Nullable)(NSError *err))failure{
+    [self POST:path params:params className:className showLoadingHud:loadingHud autoCancel:NO successHandle:success failureHandle:failure];
+}
+
++(void)POST:(NSString *)path params:(NSDictionary *_Nullable)params className:(NSString *_Nullable)className showLoadingHud:(BOOL)loadingHud autoCancel:(BOOL)cancel successHandle:(void (^_Nullable)(id data, NSString *_Nullable msg))success failureHandle:(void (^_Nullable)(NSError *err))failure{
+    [self POST:path params:params className:className showLoadingHud:loadingHud autoCancel:cancel progressHandle:nil successHandle:success failureHandle:failure];
+}
+
++(void)POST:(NSString *)path params:(NSDictionary *_Nullable)params className:(NSString *_Nullable)className showLoadingHud:(BOOL)loadingHud autoCancel:(BOOL)cancel progressHandle:(void(^_Nullable)(NSProgress* p))progress successHandle:(void (^_Nullable)(id data, NSString *_Nullable msg))success failureHandle:(void (^_Nullable)(NSError *err))failure{
+    [self POST:path params:params headers:nil className:className showLoadingHud:loadingHud autoCancel:cancel progressHandle:progress successHandle:success failureHandle:failure];
+}
+
++(void)POST:(NSString *)path params:(NSDictionary *_Nullable)params headers:(NSDictionary *_Nullable)headers className:(NSString *_Nullable)className showLoadingHud:(BOOL)loadingHud autoCancel:(BOOL)cancel progressHandle:(void(^_Nullable)(NSProgress* p))progress successHandle:(void (^_Nullable)(id data, NSString *_Nullable msg))success failureHandle:(void (^_Nullable)(NSError *err))failure{
+    CCNetworkManager *manager = [CCNetworkManager defaultManager];
+    if (cancel) [self removeTaskWithPath:path];
+    if (loadingHud && manager.configLoadingHUD) manager.configLoadingHUD();
+    NSURLSessionTask *task = [manager.sesstionManager POST:path parameters:params headers:headers progress:progress success:^(NSURLSessionDataTask * _Nonnull task, id  _Nullable responseObject) {
+        if(cancel) [self removeTaskWithPath:path];
+        [self dealWithResponse:responseObject className:className success:success failure:failure];
+    } failure:^(NSURLSessionDataTask * _Nullable task, NSError * _Nonnull error) {
+        if(cancel) [self removeTaskWithPath:path];
+        if(failure) failure(error);
+    }];
+    [task resume];
+    if(cancel) [self cacheTask:task withPath:path];
+}
+
++(void)dealWithResponse:(id)data className:(NSString *_Nullable)className success:(void (^_Nullable)(id data, NSString *_Nullable msg))success failure:(void (^_Nullable)(NSError *err))failure{
+    if([CCNetworkManager defaultManager].dealWithResopnse){
+        [CCNetworkManager defaultManager].dealWithResopnse(data, success, failure);
+        return;
+    }
+    id jsonObject = data;
+    /// 返回结果是data 则进行解析
+    if ([data isKindOfClass:[NSData class]] ){
+        NSError *err;
+        jsonObject = [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingMutableLeaves error:&err];
+        if(err) {
+            /// 如果返回格式不是json 则直接交给客户端处理
+            NSString *content = [[NSString alloc]initWithData:data encoding:NSUTF8StringEncoding];
+            if(success) success(content, nil);
+            return;
+        }
+    }
+    /// 如果返回格式是数组 则表明服务器未对数据进行封装
+    if ( [jsonObject isKindOfClass:[NSArray class]]){
+        NSArray *results = [self dealData:jsonObject className:className];
+        if (success) success(results, nil);
+        return;
+    }
+    CCResponseModel *responseModel = [CCResponseModel mj_objectWithKeyValues:jsonObject];
+    /// 数据模型不匹配
+    if ( responseModel == nil){
+        if (success) {
+            success(jsonObject, nil);
+            return;
+        }
+    }else{
+        if ([responseModel.code isEqualToString:responseModel.value]) {
+            id result = responseModel.data;
+            if ([result isKindOfClass:[NSDictionary class]]){
+                id model = [self dealObject:result className:className];
+                if (success) success(model, responseModel.msg);
+            }else{
+                id model = [self dealData:result className:className];
+                if (success) success(model, responseModel.msg);
+            }
+        }else{
+            if (failure){
+                failure([self errWithMsg:responseModel.msg]);
+            }
+        }
     }
 }
 
-+(void)POST:(NSString *)urlString params:(NSDictionary *_Nullable)params cancelLast:(BOOL)cancel  success:(CCSuccessHandle _Nullable)success failure:(CCFailureHandle _Nullable)failure{
-    AFHTTPSessionManager *manager = [CCNetworkManager defaultManager].sesstionManager;
-    NSURLSessionDataTask *task = [manager POST:urlString parameters:params headers:nil progress:nil success:^(NSURLSessionDataTask * _Nonnull task, id  _Nullable responseObject) {
-        [self removeRecordWithURL:urlString];
-        [self dealWithResponse:responseObject success:success failure:failure];
-    } failure:^(NSURLSessionDataTask * _Nullable task, NSError * _Nonnull error) {
-        [self removeRecordWithURL:urlString];
-        if (failure) {
-            failure(error);
-        }
-        
++(NSError *)errWithMsg:(NSString *)msg{
+    NSError *err = [[NSError alloc]initWithDomain:@"AFNetworkError" code:-1 userInfo:@{
+        NSLocalizedDescriptionKey: msg
     }];
-    [task resume];
-    if (cancel) {
-        [self recordRequest:urlString task:task];
+    return err;
+}
+
++(NSArray *)dealData:(NSArray *)data className:(NSString *_Nullable)className {
+    if (className == nil || !NSClassFromString(className)) {
+        return data;
+    }
+    Class clss = NSClassFromString(className);
+    NSArray *results = [clss mj_objectArrayWithKeyValuesArray:data];
+    return results;
+}
+
++(id)dealObject:(NSDictionary *)data className:(NSString *_Nullable)className{
+    if (className == nil || !NSClassFromString(className)) {
+        return data;
+    }
+    Class clss = NSClassFromString(className);
+    id result = [clss mj_objectWithKeyValues:data];
+    return result;
+}
+
++(void)cacheTask:(NSURLSessionTask *)task withPath:(NSString *)path{
+    CCNetworkManager *manager = [CCNetworkManager defaultManager];
+    NSCache *cache = manager.cache;
+    NSString *md5String = [self md5String:path];
+    NSURLSessionTask *oldTask = [cache objectForKey:md5String];
+    if (oldTask) {
+        [oldTask cancel];
+    }
+    [cache setObject:task forKey:md5String];
+}
+
++(void)removeTaskWithPath:(NSString *)path{
+    CCNetworkManager *manager = [CCNetworkManager defaultManager];
+    NSCache *cache = manager.cache;
+    NSString *md5String = [CCNetworkManager md5String:path];
+    NSURLSessionTask *task = [cache objectForKey:md5String];
+    if (task) {
+        [cache removeObjectForKey:md5String];
     }
 }
 
-+(void)POST:(NSString *)urlString photos:(NSArray *)photos params:(NSDictionary *_Nullable)params progress:(void(^)(NSProgress * _Nonnull uploadProgress))progress success:(CCSuccessHandle _Nullable)success failure:(CCFailureHandle _Nullable)failure{
+#pragma mark - UPLOAD
++(void)UPLOAD:(NSString *)path photos:(NSArray *)photos params:(NSDictionary *_Nullable)params progress:(void(^)(NSProgress * _Nonnull uploadProgress))progress success:(void (^_Nullable)(id data, NSString *_Nullable msg))success failure:(void (^_Nullable)(NSError *err))failure{
     AFHTTPSessionManager *manager = [AFHTTPSessionManager manager];
     manager.responseSerializer = [[CCNetworkManager defaultManager] responseSerializer];
     manager.requestSerializer = [[CCNetworkManager defaultManager] imageRequestSerializer];
-    dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+
     NSMutableArray *imageUrls = [[NSMutableArray alloc]init];
     for (NSInteger i = 0; i<photos.count; i++) {
-        NSData *imgData = UIImagePNGRepresentation(photos[i]);
-        NSString *fileName = [NSString stringWithFormat:@"IMG%ld.png",(NSInteger)[[NSDate date] timeIntervalSince1970]];
-        [manager POST:urlString parameters:params headers:nil constructingBodyWithBlock:^(id<AFMultipartFormData>  _Nonnull formData) {
+        [manager POST:path parameters:params headers:nil constructingBodyWithBlock:^(id<AFMultipartFormData>  _Nonnull formData) {
+            NSData *imgData = UIImagePNGRepresentation(photos[i]);
+            NSString *fileName = [NSString stringWithFormat:@"IMG%ld.png",(NSInteger)[[NSDate date] timeIntervalSince1970]];
             [formData appendPartWithFileData:imgData name:@"file" fileName:fileName mimeType:@"image/png"];
         } progress:^(NSProgress * _Nonnull uploadProgress) {
                 
         } success:^(NSURLSessionDataTask * _Nonnull task, id  _Nullable responseObject) {
             [imageUrls addObject:@""];
             if (imageUrls.count == photos.count) {
-                if (success) success(imageUrls);
+                if (success) success(imageUrls, nil);
             }
-            dispatch_semaphore_signal(semaphore);
+            
         } failure:^(NSURLSessionDataTask * _Nullable task, NSError * _Nonnull error) {
             [imageUrls addObject:@""];
             if (imageUrls.count == photos.count) {
-                if (success) success(imageUrls);
+                if (success) success(imageUrls, nil);
             }
-            dispatch_semaphore_signal(semaphore);
         }];
-        dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
     }
 }
 
-
-+(void)dealWithResponse:(id)data success:(CCSuccessHandle _Nullable)success failure:(CCFailureHandle _Nullable)failure{
-    
-}
-
-
-+(void)recordRequest:(NSString *)urlString task:(NSURLSessionTask *)task{
-    CCNetworkManager *manager = [CCNetworkManager defaultManager];
-    NSMutableDictionary *caches = manager.caches;
-    NSString *md5String = [self md5String:urlString];
-    NSURLSessionTask *oldTask = [caches objectForKey:md5String];
-    if (oldTask) {
-        [oldTask cancel];
-    }
-    [caches setObject:task forKey:md5String];
-}
-
-+(void)removeRecordWithURL:(NSString *)urlString{
-    CCNetworkManager *manager = [CCNetworkManager defaultManager];
-    NSMutableDictionary *caches = manager.caches;
-    NSString *md5String = [CCNetworkManager md5String:urlString];
-    NSURLSessionTask *task = [caches objectForKey:md5String];
-    if (task) {
-        [caches removeObjectForKey:md5String];
-    }
-}
 
 + (NSString *)md5String:(NSString *)str
 {
